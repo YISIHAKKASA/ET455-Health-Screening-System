@@ -1,0 +1,112 @@
+
+<script>
+const user = ET455.requireRole('admin');
+
+if (user) {
+  document.getElementById('userName').textContent = user.name;
+}
+
+document.getElementById('logout').onclick = (e) => {
+  e.preventDefault();
+  ET455.logout();
+};
+
+let databaseChildren = [];
+
+function escapeHtml(value) {
+  return ET455.esc(value == null ? '' : String(value));
+}
+
+async function loadChildren() {
+  const rows = document.getElementById('rows');
+
+  rows.innerHTML =
+    '<tr><td colspan="7">Loading children from PostgreSQL...</td></tr>';
+
+  try {
+    const result = await ET455API.children();
+
+    databaseChildren = (result.children || []).map(c => ({
+      id: c.id,
+      projectId: c.project_id,
+      fullName: c.full_name,
+      age: c.age,
+      gender: c.gender,
+      school: c.school,
+      status: c.status
+    }));
+
+    render();
+  } catch (error) {
+    console.error('Could not load children:', error);
+
+    rows.innerHTML =
+      '<tr><td colspan="7" class="text-danger">' +
+      'Could not load children from PostgreSQL. ' +
+      escapeHtml(error.message) +
+      '</td></tr>';
+  }
+}
+
+function render() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const status = document.getElementById('status').value;
+
+  const children = databaseChildren.filter(c =>
+    ((c.fullName || '') + ' ' + (c.projectId || ''))
+      .toLowerCase()
+      .includes(q) &&
+    (status === 'All' || c.status === status)
+  );
+
+  const rows = document.getElementById('rows');
+
+  if (!children.length) {
+    rows.innerHTML =
+      '<tr><td colspan="7">No matching children found in PostgreSQL.</td></tr>';
+    return;
+  }
+
+  rows.innerHTML = children.map(c => `
+    <tr>
+      <td>${escapeHtml(c.projectId)}</td>
+      <td>${escapeHtml(c.fullName)}</td>
+      <td>${escapeHtml(c.age)}</td>
+      <td>${escapeHtml(c.gender)}</td>
+      <td>${escapeHtml(c.school)}</td>
+      <td>${escapeHtml(c.status)}</td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary"
+                data-id="${Number(c.id)}">View</button>
+      </td>
+    </tr>
+  `).join('');
+
+  rows.querySelectorAll('[data-id]').forEach(button => {
+    button.onclick = () => {
+      const child = databaseChildren.find(
+        c => Number(c.id) === Number(button.dataset.id)
+      );
+
+      if (!child) return;
+
+      document.getElementById('detail').innerHTML =
+        Object.entries(child).map(([key, value]) => `
+          <div class="row py-2 border-bottom">
+            <div class="col-5 muted">${escapeHtml(key)}</div>
+            <div class="col-7 fw-semibold">${escapeHtml(value)}</div>
+          </div>
+        `).join('');
+
+      bootstrap.Modal
+        .getOrCreateInstance(document.getElementById('childModal'))
+        .show();
+    };
+  });
+}
+
+document.getElementById('search').oninput = render;
+document.getElementById('status').onchange = render;
+
+loadChildren();
+</script>

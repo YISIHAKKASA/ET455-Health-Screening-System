@@ -1,0 +1,294 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ET455 Health Screening System - Login</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      color: #1f2937;
+      background: #eef4f8;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 430px;
+      padding: 32px;
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.10);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      text-align: center;
+      color: #087f8c;
+      font-size: 27px;
+    }
+
+    .subtitle {
+      margin: 0 0 26px;
+      text-align: center;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    label {
+      display: block;
+      margin: 17px 0 7px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      background: white;
+      font-size: 16px;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid #0d9488;
+      border-color: #0d9488;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 23px;
+      padding: 13px;
+      border: 0;
+      border-radius: 7px;
+      background: #087f8c;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #066874;
+    }
+
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    #message {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 7px;
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    #message.error {
+      display: block;
+      color: #991b1b;
+      background: #fee2e2;
+    }
+
+    #message.success {
+      display: block;
+      color: #166534;
+      background: #dcfce7;
+    }
+
+    .footer {
+      margin-top: 22px;
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="login-card">
+    <h1>ET455 Health</h1>
+    <p class="subtitle">Health Screening System</p>
+
+    <form id="loginForm">
+      <label for="role">Select your role</label>
+
+      <select id="role" name="role" required>
+        <option value="admin">Administrator</option>
+        <option value="director">Project Director</option>
+        <option value="health-staff">Health Staff</option>
+        <option value="doctor">Specialist Doctor</option>
+      </select>
+
+      <label for="pin">Enter your PIN</label>
+
+      <input
+        id="pin"
+        name="pin"
+        type="password"
+        inputmode="numeric"
+        autocomplete="current-password"
+        placeholder="Enter your PIN"
+        required
+      >
+
+      <button id="loginButton" type="submit">
+        Sign In
+      </button>
+
+      <div id="message" role="alert" aria-live="polite"></div>
+    </form>
+
+    <p class="footer">
+      ET455 Health Screening System
+    </p>
+  </main>
+
+  <script>
+    "use strict";
+
+    const form = document.getElementById("loginForm");
+    const button = document.getElementById("loginButton");
+    const message = document.getElementById("message");
+
+    // This page and the API use the same server on port 4000.
+    const API_URL = "/api/auth/login";
+
+    // The Administrator page is confirmed to exist.
+    // Verify the other dashboard filenames before using those roles.
+    const dashboardPages = {
+      admin: "admin/dashboard.html",
+      director: "director/dashboard.html",
+      "health-staff": "health-staff/dashboard.html",
+      doctor: "doctor/dashboard.html"
+    };
+
+    function showMessage(text, type) {
+      message.textContent = text;
+      message.className = type;
+    }
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+
+      const role = document.getElementById("role").value;
+      const pin = document.getElementById("pin").value.trim();
+
+      if (!pin) {
+        showMessage("Please enter your PIN.", "error");
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Signing in...";
+      message.textContent = "";
+      message.className = "";
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            role: role,
+            pin: pin
+          })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.message ||
+            data.error ||
+            "Login failed. Check your selected role and PIN."
+          );
+        }
+
+        if (!data.token || !data.user) {
+          throw new Error(
+            "The server did not return the expected login information."
+          );
+        }
+
+        const sessionUser = data.user;
+        const now = Date.now();
+
+        // IMPORTANT:
+        // Save both the API token and the fields expected by
+        // shared/db.js, including requireRole() and currentUser().
+        const session = {
+          token: data.token,
+          user: sessionUser,
+          role: sessionUser.role,
+          name: sessionUser.name,
+          userId: sessionUser.id,
+          at: now,
+          expiresAt: now + (8 * 60 * 60 * 1000)
+        };
+
+        localStorage.setItem(
+          "et455_session",
+          JSON.stringify(session)
+        );
+
+        // Select the dashboard using the role returned by the API.
+        const destination = dashboardPages[sessionUser.role];
+
+        if (!destination) {
+          localStorage.removeItem("et455_session");
+          throw new Error(
+            "No dashboard is configured for this account role."
+          );
+        }
+
+        showMessage(
+          "Login successful. Opening your dashboard...",
+          "success"
+        );
+
+        // Relative path from the root login.html page.
+        window.location.assign(destination);
+
+      } catch (error) {
+        console.error("ET455 login error:", error);
+
+        if (error instanceof TypeError) {
+          showMessage(
+            "Cannot connect to the login API. Make sure the backend " +
+            "is running and open this page at " +
+            "http://localhost:4000/login.html.",
+            "error"
+          );
+        } else {
+          showMessage(
+            error.message || "An unexpected login error occurred.",
+            "error"
+          );
+        }
+      } finally {
+        button.disabled = false;
+        button.textContent = "Sign In";
+      }
+    });
+  </script>
+</body>
+</html>
